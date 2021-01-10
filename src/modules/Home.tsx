@@ -1,42 +1,48 @@
 import {
-    Scene, Mesh, HemisphericLight, MeshBuilder, Vector3, StandardMaterial, Texture,
-    CubeTexture, Color3, Color4, FollowCamera
+    Scene, HemisphericLight, MeshBuilder, Vector3, StandardMaterial, Texture,
+    CubeTexture, Color3, FollowCamera, UniversalCamera, Viewport, SceneLoader,
+    AbstractMesh, Skeleton, IParticleSystem
 } from "@babylonjs/core";
 import { Container } from "react-bootstrap";
-import SceneComponent from "./SceneComponent";
+import { SceneComponent } from "./SceneComponent";
+import '@babylonjs/loaders';
+import { MenuBar } from "./MenuBar";
+import { Component } from "react";
+import { ImportFile } from "./ImportFile";
 
 const MoonTextureUrl = '/rocket/texture/moon.jpg';
 const PlatformTextureUrl = '/rocket/texture/platform.jpg';
 const SkyBoxUrl = '/rocket/texture/skybox';
+const RootUrl = '/rocket/objs/';
+const RocketFile = 'rocket.gltf';
 const PlatformRatio = 480 / 360;
 const PlatformSize = 20;
-const RocketSize = 3;
-
-let box: Mesh | undefined;
-let camera: FollowCamera | undefined;
-let t: number = 0;
-
-const Duration = 30;
-
+const Viewpoint = new Vector3(-20, 1.7, 40);
 const Path = [
     new Vector3(500, 150, 500),
     new Vector3(250, 150, 250),
     new Vector3(100, 100, 100),
-    new Vector3(20, 10, 20),
-    // new Vector3(250, 50, 2500),
-    new Vector3(0, 0, 0)
+    new Vector3(20, 50, 30),
+    new Vector3(7, 10, -3),
+    new Vector3(-4, 0, 1)
 ];
 
 /**
  * 
  * @param t 
+ * @param dt 
+ * @param path 
  */
-function rocketPos(t: number) {
-    const n = Path.length;
-    if (t >= Duration) {
+function rocketPos(t: number, dt: number, path?: Vector3[]) {
+    if (!path) {
+        return Vector3.Zero();
+    }
+    const n = path.length;
+    const duration = (n - 1) * dt;
+    if (t >= duration) {
         return Path[n - 1];
     } else {
-        const nt = t * (n - 1) / Duration;
+        const nt = t / dt;
         const i = Math.floor(nt);
         const dl = nt - i;
         const p0 = Path[i];
@@ -51,36 +57,12 @@ function rocketPos(t: number) {
  * 
  * @param scene 
  */
-function createRocket(scene: Scene) {
-    // Our built-in 'box' shape.
-    const box = MeshBuilder.CreateBox("box", {
-        size: RocketSize,
-        faceColors: [Color4.FromInts(255, 255, 0, 255)]
-    }, scene);
-    // Move the box upward 1/2 its height
-    const p = rocketPos(0);
-    p.y += RocketSize / 2;
-    box.position = p;
-    return box;
-}
-
-function createCamera(scene: Scene) {
-    // const canvas = scene.getEngine().getRenderingCanvas();
-    // const camera = new FreeCamera("camera1", new Vector3(0, 30, -50), scene);
-    // // This targets the camera to scene origin
-    // camera.setTarget(Vector3.Zero());
-    const p = rocketPos(0);
-    const camera = new FollowCamera("camera1", p, scene);
-    camera.radius = 10;
-    camera.heightOffset = 1.7 - RocketSize / 2;
-    // The goal rotation of camera around local origin (centre) of target in x y plane
-    camera.rotationOffset = 0;
-    // Acceleration of camera in moving from current to goal position
-    // camera.cameraAcceleration = 0.005;
-    camera.cameraAcceleration = 0.03;
-    // The speed at which acceleration is halted
+function createCamera1(scene: Scene) {
+    const camera = new FollowCamera("camera1", Viewpoint, scene);
+    camera.radius = 45;
+    camera.heightOffset = 1.7;
+    camera.cameraAcceleration = 0.01;
     camera.maxCameraSpeed = 200 / 3.6;
-    // camera.attachControl(true);
     return camera;
 }
 
@@ -88,20 +70,65 @@ function createCamera(scene: Scene) {
  * 
  * @param scene 
  */
+function createCamera2(scene: Scene) {
+    const camera = new UniversalCamera('camera2', Viewpoint, scene);
+    camera.attachControl(true);
+    return camera;
+}
+
+/**
+ * 
+ * @param scene 
+ */
+function loadRocket(scene: Scene) {
+    // The first parameter can be set to null to load all meshes and skeletons
+    SceneLoader.ImportMesh('10475_Rocket_Ship_v1_L3', RootUrl, RocketFile, scene,
+        (meshes: AbstractMesh[], particles: IParticleSystem[], skeletons: Skeleton[]) => {
+            onRocketLoad(scene, meshes[0]);
+        });
+}
+
+/**
+ * 
+ * @param scene 
+ * @param rocket 
+ */
+function onRocketLoad(scene: Scene, rocket: AbstractMesh) {
+    const camera1 = scene.getCameraByName('camera1') as (FollowCamera | null);
+    const camera2 = scene.getCameraByName('camera2') as (UniversalCamera | null);
+    if (camera1 && camera2) {
+        rocket.name = 'rocket';
+        camera1.lockedTarget = rocket;
+        camera2.lockedTarget = rocket;
+    }
+}
+
+/**
+ * 
+ * @param scene 
+ */
 function onSceneReady(scene: Scene) {
-    box = createRocket(scene);
-    // This attaches the camera to the canvas
-    camera = createCamera(scene);
-    // camera.target = box; // version 2.4 and earlier
-    camera.lockedTarget = box; //version 2.5 onwards
+    const camera = createCamera1(scene);
+
+    const camera2 = createCamera2(scene);
+    camera.viewport = new Viewport(0, 0, 0.5, 1.0);
+    camera2.viewport = new Viewport(0.5, 0, 0.5, 1.0);
+
+    scene.activeCameras?.push(camera);
+    scene.activeCameras?.push(camera2);
 
     // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
-    var light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
+    const light = new HemisphericLight("light", new Vector3(1, 1, 0), scene);
+    // const light = new DirectionalLight("light", new Vector3(1, -1, -1), scene);
     // Default intensity is 1. Let's dim the light a small amount
-    light.intensity = 0.7;
+    light.intensity = 1;
+
     // Texture
     const groundMat = new StandardMaterial("groundMat", scene);
+    // groundMat.specularColor = Color3.White().scale(0.7);
+    // groundMat.specularPower=0.5;
     groundMat.diffuseTexture = new Texture(MoonTextureUrl, scene);
+
 
     // Our built-in 'ground' shape.
     const ground = MeshBuilder.CreateGround("ground", { width: 1000, height: 1000, subdivisions: 2 }, scene);
@@ -128,33 +155,104 @@ function onSceneReady(scene: Scene) {
     skyboxMaterial.diffuseColor = new Color3(0, 0, 0);
     skyboxMaterial.specularColor = new Color3(0, 0, 0);
     skybox.material = skyboxMaterial;
-
+    loadRocket(scene);
 }
 
-/**
- * Will run on every frame render.  We are spinning the box on y-axis.
- */
-const onRender = (scene: Scene) => {
-    if (box !== undefined) {
-        t += scene.getEngine().getDeltaTime() / 1000;
-        const p = rocketPos(t).add(new Vector3(0, RocketSize / 2, 0));
-        box.position = p;
-        // camera?.setTarget(p);
+export class Home extends Component<{}, {
+    t: number;
+    sampleInterval: number;
+    path?: Vector3[];
+    importModalShown: boolean
+}>{
 
-        // var deltaTimeInMillis = scene.getEngine().getDeltaTime();
-        // const rpm = 10;
-        // box.rotation.y += ((rpm / 60) * Math.PI * 2 * (deltaTimeInMillis / 1000));
+    /**
+     * 
+     * @param props 
+     */
+    constructor(props: {}) {
+        super(props);
+        this.state = {
+            t: 0,
+            sampleInterval: 30 / (Path.length - 1),
+            path: Path,
+            importModalShown: false
+        };
     }
-}
 
-export function Home() {
-    return (
-        <Container>
-            <SceneComponent antialias
-                width={1024}
-                height={640}
-                onSceneReady={onSceneReady}
-                onRender={onRender} id='rocket-canvas' />
-        </Container>
-    );
+    /**
+     * Will run on every frame render.  We are spinning the box on y-axis.
+     */
+    private onRender(scene: Scene) {
+        const rocket = scene.getMeshByName('rocket');
+        const { t: t0, path, sampleInterval } = this.state;
+        const dt1 = scene.getEngine().getDeltaTime() / 1000;
+        const t = t0 + dt1;
+        if (rocket && path) {
+            const p = rocketPos(t, sampleInterval, path);
+            rocket.position = p;
+        }
+        this.setState({ t });
+    }
+
+    /**
+     * 
+     */
+    private onReplay() {
+        this.setState({ t: 0 });
+    }
+
+    /**
+     * 
+     */
+    private showImportPanel() {
+        this.setState({ importModalShown: true });
+    }
+
+    /**
+     * 
+     */
+    private onImportCancel() {
+        this.setState({ importModalShown: false });
+    }
+
+    /**
+     * 
+     * @param data 
+     */
+    private onImportFile(data: string | ArrayBuffer | null) {
+        console.log(data);
+        this.setState({ importModalShown: false, t: 0 });
+    }
+
+    /**
+     * 
+     * @param error 
+     */
+    private onImportError(error: string) {
+        console.error(error);
+        this.setState({ importModalShown: false });
+    }
+
+    render() {
+        const { importModalShown } = this.state;
+        return (
+            <Container fluid>
+                <MenuBar
+                    onImport={() => this.showImportPanel()}
+                    onReplay={() => this.onReplay()}
+                />
+                <Container fluid>
+                    <SceneComponent antialias
+                        width={1400}
+                        height={640}
+                        onSceneReady={onSceneReady}
+                        onRender={scene => this.onRender(scene)} id='rocket-canvas' />
+                </Container>
+                <ImportFile show={importModalShown}
+                    onCancel={() => { this.onImportCancel() }}
+                    onFileRead={data => this.onImportFile(data)}
+                    onError={e => this.onImportError(e)} />
+            </Container>
+        );
+    }
 }

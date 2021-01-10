@@ -1,4 +1,4 @@
-import React, { useEffect, useContext, useRef, useState } from 'react';
+import React, { useEffect, useContext, useRef, useState, FunctionComponent } from 'react';
 import { Engine, Scene, Nullable, EngineOptions, SceneOptions, EventState, Observer, Camera } from '@babylonjs/core';
 import { EngineCanvasContext, EngineCanvasContextType, SceneContext, SceneContextType } from 'babylonjs-hook';
 import '../App.css';
@@ -107,12 +107,12 @@ export const useCamera = <T extends Camera>(createCameraFn: (scene: Scene) => T,
             }
             camera.dispose();
         }
-    }, [scene]);
+    }, [scene, autoAttach, createCameraFn, noPreventDefault]);
 
     return cameraRef.current;
 }
 
-export default (props: BabylonjsProps) => {
+export const SceneComponent: FunctionComponent<BabylonjsProps> = props => {
     const reactCanvas = useRef<Nullable<HTMLCanvasElement>>(null);
     const { antialias, engineOptions, adaptToDeviceRatio, sceneOptions, onRender, onSceneReady, renderChildrenWhenReady, children, ...rest } = props;
 
@@ -186,11 +186,11 @@ export default (props: BabylonjsProps) => {
                 }
             }
         }
-    }, [reactCanvas]);
+    }, [reactCanvas, adaptToDeviceRatio, antialias, engineOptions, onRender, props, sceneOptions]);
 
     return (
         <>
-            <canvas ref={reactCanvas} {...rest}/>
+            <canvas ref={reactCanvas} {...rest} />
             <EngineCanvasContext.Provider value={engineContext}>
                 <SceneContext.Provider value={sceneContext}>
                     {(renderChildrenWhenReady !== true || (renderChildrenWhenReady === true && sceneContext.sceneReady)) &&
