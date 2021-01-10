@@ -4,7 +4,7 @@ import {
     AbstractMesh, Skeleton, IParticleSystem
 } from "@babylonjs/core";
 import { Container } from "react-bootstrap";
-import SceneComponent from "./SceneComponent";
+import { SceneComponent } from "./SceneComponent";
 import '@babylonjs/loaders';
 import { MenuBar } from "./MenuBar";
 import { Component } from "react";
