@@ -1,22 +1,22 @@
 {
   "files": {
     "main.css": "/rocket/static/css/main.54dcd237.chunk.css",
-    "main.js": "/rocket/static/js/main.92a7d4ce.chunk.js",
-    "main.js.map": "/rocket/static/js/main.92a7d4ce.chunk.js.map",
+    "main.js": "/rocket/static/js/main.4e93a1cf.chunk.js",
+    "main.js.map": "/rocket/static/js/main.4e93a1cf.chunk.js.map",
     "runtime-main.js": "/rocket/static/js/runtime-main.63fb395f.js",
     "runtime-main.js.map": "/rocket/static/js/runtime-main.63fb395f.js.map",
-    "static/js/2.56021461.chunk.js": "/rocket/static/js/2.56021461.chunk.js",
-    "static/js/2.56021461.chunk.js.map": "/rocket/static/js/2.56021461.chunk.js.map",
+    "static/js/2.fd49a708.chunk.js": "/rocket/static/js/2.fd49a708.chunk.js",
+    "static/js/2.fd49a708.chunk.js.map": "/rocket/static/js/2.fd49a708.chunk.js.map",
     "static/js/3.b3410a3b.chunk.js": "/rocket/static/js/3.b3410a3b.chunk.js",
     "static/js/3.b3410a3b.chunk.js.map": "/rocket/static/js/3.b3410a3b.chunk.js.map",
     "index.html": "/rocket/index.html",
     "static/css/main.54dcd237.chunk.css.map": "/rocket/static/css/main.54dcd237.chunk.css.map",
-    "static/js/2.56021461.chunk.js.LICENSE.txt": "/rocket/static/js/2.56021461.chunk.js.LICENSE.txt"
+    "static/js/2.fd49a708.chunk.js.LICENSE.txt": "/rocket/static/js/2.fd49a708.chunk.js.LICENSE.txt"
   },
   "entrypoints": [
     "static/js/runtime-main.63fb395f.js",
-    "static/js/2.56021461.chunk.js",
+    "static/js/2.fd49a708.chunk.js",
     "static/css/main.54dcd237.chunk.css",
-    "static/js/main.92a7d4ce.chunk.js"
+    "static/js/main.4e93a1cf.chunk.js"
   ]
 }
