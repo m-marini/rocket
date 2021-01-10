@@ -1,6 +1,7 @@
 import {
     Scene, HemisphericLight, MeshBuilder, Vector3, StandardMaterial, Texture,
-    CubeTexture, Color3, FollowCamera, UniversalCamera, Viewport, SceneLoader, AbstractMesh, Skeleton, IParticleSystem, DirectionalLight
+    CubeTexture, Color3, FollowCamera, UniversalCamera, Viewport, SceneLoader,
+    AbstractMesh, Skeleton, IParticleSystem
 } from "@babylonjs/core";
 import { Container } from "react-bootstrap";
 import SceneComponent from "./SceneComponent";
