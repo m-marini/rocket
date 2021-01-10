@@ -9,3 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.1.1] - 2021-01-10
+
+### Fixed
+
+- Issue #4: Unable to load 3d model
+
+## [0.1.0] - 2021-01-10
+
+### Added
+
+- Issue #1: Initial project
