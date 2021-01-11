@@ -9,11 +9,13 @@ import '@babylonjs/loaders';
 import { MenuBar } from "./MenuBar";
 import { Component } from "react";
 import { ImportFile } from "./ImportFile";
+import { homepage } from '../../package.json';
 
-const MoonTextureUrl = '/rocket/texture/moon.jpg';
-const PlatformTextureUrl = '/rocket/texture/platform.jpg';
-const SkyBoxUrl = 'io/rocket/texture/skybox';
-const RocketModelUrl = '/rocket/objs/';
+const WebContext = homepage;
+const MoonTextureUrl = `${WebContext}/texture/moon.jpg`;
+const PlatformTextureUrl = `${WebContext}/texture/platform.jpg`;
+const SkyBoxUrl = `${WebContext}/texture/skybox`;
+const RocketModelUrl = `${WebContext}/objs/`;
 const RocketFile = 'rocket.gltf';
 const PlatformRatio = 480 / 360;
 const PlatformSize = 20;
