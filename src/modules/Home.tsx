@@ -10,25 +10,23 @@ import { MenuBar } from "./MenuBar";
 import { Component } from "react";
 import { ImportFile } from "./ImportFile";
 import { homepage } from '../../package.json';
+import { filter, map, tap, toArray } from 'rxjs/operators';
+import { Observable } from "rxjs";
+import { ajax } from 'rxjs/ajax';
+import { csv, lines, vector3 } from "./position-reader";
 
 const WebContext = homepage;
-const MoonTextureUrl = `${WebContext}/texture/moon.jpg`;
-const PlatformTextureUrl = `${WebContext}/texture/platform.jpg`;
-const SkyBoxUrl = `${WebContext}/texture/skybox`;
-const RocketModelUrl = `${WebContext}/objs/`;
+const MoonTextureUrl = `/${WebContext}/texture/moon.jpg`;
+const PlatformTextureUrl = `/${WebContext}/texture/platform.jpg`;
+const SkyBoxUrl = `/${WebContext}/texture/skybox`;
+const RocketModelUrl = `/${WebContext}/objs/`;
 const RocketFile = 'rocket.gltf';
+const SampleUrl = `/${WebContext}/sample.csv`;
 const PlatformRatio = 480 / 360;
 const PlatformSize = 20;
 const Viewpoint = new Vector3(-20, 1.7, 40);
 
-const Path = [
-    new Vector3(500, 150, 500),
-    new Vector3(250, 150, 250),
-    new Vector3(100, 100, 100),
-    new Vector3(20, 50, 30),
-    new Vector3(7, 10, -3),
-    new Vector3(-4, 0, 1)
-];
+const SampleInterval = 0.25;
 
 /**
  * 
@@ -40,7 +38,7 @@ class SceneStatus {
 
     constructor() {
         this._t = 0;
-        this._sampleInterval = 0;
+        this._sampleInterval = SampleInterval;
     }
 
     get t() { return this._t; }
@@ -114,7 +112,7 @@ function createStatus(sampleInterval: number, path?: Vector3[]) {
     return status;
 }
 
-const status = createStatus(30 / (Path.length - 1), Path);
+const status = createStatus(SampleInterval);
 
 /**
  * 
@@ -267,6 +265,16 @@ function onRender(scene: Scene) {
     }
 }
 
+function positionVectors() {
+    return (obs: Observable<string>) => obs.pipe(
+        lines(),
+        filter(text => !!text),
+        csv(),
+        vector3(0),
+        toArray()
+    );
+}
+
 /**
  * 
  */
@@ -285,6 +293,17 @@ export class Home extends Component<{}, {
         };
     }
 
+    componentDidMount() {
+        const obs = ajax({
+            url: SampleUrl,
+            responseType: 'text'
+        }).pipe(
+            map(data => data.response),
+        );
+        this.importFile(obs);
+
+    }
+
     /**
      * 
      */
@@ -299,22 +318,34 @@ export class Home extends Component<{}, {
         this.setState({ importModalShown: false });
     }
 
-    /**
-     * 
-     * @param data 
-     */
-    private onImportFile(data: string | ArrayBuffer | null) {
-        console.log(data);
-        this.setState({ importModalShown: false });
+    private importFile(data: Observable<string>) {
+        data.pipe(
+            positionVectors(),
+            tap(
+                data => this.onPathReady(data),
+                err => this.onImportError(err)
+            )
+        ).subscribe();
     }
 
     /**
      * 
+     * @param data 
+     */
+    private onImportFile(data: Observable<string>) {
+        this.setState({ importModalShown: false });
+        this.importFile(data);
+    }
+
+    private onPathReady(path: Vector3[]) {
+        status.path = path;
+    }
+    /**
+     * 
      * @param error 
      */
-    private onImportError(error: string) {
+    private onImportError(error: any) {
         console.error(error);
-        this.setState({ importModalShown: false });
     }
 
     render() {
@@ -335,8 +366,7 @@ export class Home extends Component<{}, {
                 </Container>
                 <ImportFile show={importModalShown}
                     onCancel={() => { this.onImportCancel() }}
-                    onFileRead={data => this.onImportFile(data)}
-                    onError={e => this.onImportError(e)} />
+                    onSelect={obs => this.onImportFile(obs)} />
             </Container>
         );
     }
