@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 - Issue #7: Missing skybox load
+- Issue #10:  Update rocket path
 
 ## [0.1.1] - 2021-01-10
 
