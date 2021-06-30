@@ -12,6 +12,19 @@ export function vector3(offset: number) {
 
 /**
  * 
+ * @param offsets 
+ * @returns 
+ */
+export function vectors3(offsets: number[]) {
+    return map((data: number[]) =>
+        offsets.map(i =>
+            new Vector3(data[i], data[i + 2], data[i + 1])
+        )
+    );
+}
+
+/**
+ * 
  */
 export function csv() {
     return map((line: string) => line.split(',').map(parseFloat));
