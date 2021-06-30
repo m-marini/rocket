@@ -6,6 +6,7 @@ import {
 import { Container } from "react-bootstrap";
 import { SceneComponent } from "./SceneComponent";
 import '@babylonjs/loaders';
+import { AdvancedDynamicTexture, TextBlock, Control } from 'babylonjs-gui';
 import { MenuBar } from "./MenuBar";
 import { Component } from "react";
 import { ImportFile } from "./ImportFile";
@@ -13,7 +14,8 @@ import { homepage } from '../../package.json';
 import { filter, map, tap, toArray } from 'rxjs/operators';
 import { Observable } from "rxjs";
 import { ajax } from 'rxjs/ajax';
-import { csv, lines, vector3 } from "./position-reader";
+import { csv, lines } from "./position-reader";
+import { sprintf } from 'sprintf-js';
 
 const WebContext = homepage;
 const MoonTextureUrl = `/${WebContext}/texture/moon.jpg`;
@@ -28,13 +30,28 @@ const Viewpoint = new Vector3(-20, 1.7, 40);
 
 const SampleInterval = 0.25;
 
+var hud: TextBlock | undefined;
+
+type Status = {
+    position: Vector3;
+    speed: Vector3;
+    fuel: number;
+    status: number;
+}
+
+function interpolateV3(p0: Vector3, p1: Vector3, alpha: number) {
+    const p01 = p1.subtract(p0);
+    const p = p01.scale(alpha).add(p0);
+    return p;
+}
+
 /**
  * 
  */
 class SceneStatus {
     private _t: number;
     private _sampleInterval: number;
-    private _path: Vector3[] | undefined;
+    private _path: Status[] | undefined;
 
     constructor() {
         this._t = 0;
@@ -54,35 +71,76 @@ class SceneStatus {
         this._t = 0;
     }
 
-    set path(path: Vector3[] | undefined) {
+    set path(path: Status[] | undefined) {
         this._path = path;
         this._t = 0;
     }
 
     /**
      * 
-    * @param t 
-    * @param dt 
-    * @param path 
-    */
+     * @returns 
+     */
     position() {
+        const x = this.interpolate();
+        if (!!x) {
+            return interpolateV3(x.from.position, x.to.position, x.alpha);
+        } else {
+            return Vector3.Zero();
+        }
+    }
+
+    /**
+     * 
+     * @returns 
+     */
+    speed() {
+        const x = this.interpolate();
+        if (!!x) {
+            return interpolateV3(x.from.speed, x.to.speed, x.alpha);
+        } else {
+            return Vector3.Zero();
+        }
+    }
+
+    status() {
+        const x = this.interpolate();
+        if (!!x) {
+            return x.from.status;
+        } else {
+            return 0;
+        }
+    }
+
+    fuel() {
+        const x = this.interpolate();
+        if (!!x) {
+            return (x.to.fuel-x.from.fuel) * x.alpha + x.from.fuel;
+        } else {
+            return 0;
+        }
+    }
+
+    /**
+     * 
+     * @param idx 
+     * @returns 
+     */
+    interpolate() {
         const { path, t, sampleInterval } = this;
         if (!path) {
-            return Vector3.Zero();
+            return undefined;
         }
         const n = path.length;
         const duration = (n - 1) * sampleInterval;
         if (t >= duration) {
-            return path[n - 1];
+            return { from: path[n - 1], to: path[n - 1], alpha: 0 };
         } else {
             const nt = t / sampleInterval;
             const i = Math.floor(nt);
-            const dl = nt - i;
-            const p0 = path[i];
-            const p1 = path[i + 1];
-            const p01 = p1.subtract(p0);
-            const p = p01.scale(dl).add(p0);
-            return p;
+            const alpha = nt - i;
+            const from = path[i];
+            const to = path[i + 1];
+            return { from, to, alpha };
         }
     }
 
@@ -105,7 +163,7 @@ class SceneStatus {
  * @param sampleInterval 
  * @param path 
  */
-function createStatus(sampleInterval: number, path?: Vector3[]) {
+function createStatus(sampleInterval: number, path?: Status[]) {
     const status = new SceneStatus();
     status.path = path;
     status.sampleInterval = sampleInterval;
@@ -161,12 +219,6 @@ function onRocketLoad(scene: Scene, rocket: AbstractMesh) {
         rocket.name = 'rocket';
         camera1.lockedTarget = rocket;
         camera2.lockedTarget = rocket;
-
-        // const light = scene.getLightByName('light');
-        // if (light) {
-        //     const shadowGenerator = new ShadowGenerator(1024, light as DirectionalLight);
-        //     shadowGenerator.addShadowCaster(rocket);
-        // }
     }
 }
 
@@ -197,6 +249,27 @@ function buildGround(scene: Scene) {
     ground.position.y = -0.01;
     // ground.receiveShadows = true;
     return ground;
+}
+
+/**
+ * 
+ * @param scene 
+ */
+function buildHud(scene: Scene) {
+    const advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("GUI", undefined, scene);
+    const text1 = new TextBlock("HUD");
+    text1.color = "white";
+    text1.width = "250px";
+    text1.height = "100px";
+    text1.fontFamily = "monospace";
+    text1.fontSize = 20;
+    // text1.color = "#00ffff"
+    text1.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    text1.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
+    text1.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
+    text1.paddingLeftInPixels = 10;
+    advancedTexture.addControl(text1);
+    return text1;
 }
 
 /**
@@ -245,11 +318,33 @@ function onSceneReady(scene: Scene) {
     scene.activeCameras?.push(camera);
     scene.activeCameras?.push(camera2);
 
+    hud = buildHud(scene);
     buildLights(scene);
     buildGround(scene);
     buildPlatform(scene);
     buildSkybox(scene);
     loadRocket(scene);
+}
+
+function renderHud(hud: TextBlock | undefined, status: SceneStatus) {
+    if (!!hud) {
+        const position = status.position();
+        const d = Math.sqrt(position.x * position.x + position.z * position.z);
+        const dirpn = 180 * Math.atan2(position.x, position.z) / Math.PI;
+        const dir = Math.round(dirpn > 0 ? dirpn : dirpn + 360);
+
+        const speed = status.speed();
+        const vh = Math.sqrt(speed.x * speed.x + speed.z * speed.z);
+        const vdirpn = 180 * Math.atan2(speed.x, speed.z) / Math.PI;
+        const vdir = Math.round(vdirpn > 0 ? vdirpn : vdirpn + 360);
+
+        const txt = sprintf('Pos   %05.1f %03d %05.1f\nSpeed %03.1f %03d %+03.1f\nFuel  %05.1f',
+            d, dir, position.y,
+            vh, vdir, speed.y,
+            status.fuel());
+        hud.text = txt;
+    }
+    return hud;
 }
 
 /**
@@ -263,6 +358,22 @@ function onRender(scene: Scene) {
     if (rocket) {
         rocket.position = status.position();
     }
+    renderHud(hud, status);
+}
+
+/**
+ * 
+ * @returns 
+ */
+function toStatus() {
+    return map((data: number[]) => {
+        return {
+            position: new Vector3(data[0], data[2], data[1]),
+            speed: new Vector3(data[3], data[5], data[4]),
+            fuel: data[6],
+            status: data[8]
+        };
+    });
 }
 
 function positionVectors() {
@@ -270,7 +381,7 @@ function positionVectors() {
         lines(),
         filter(text => !!text),
         csv(),
-        vector3(0),
+        toStatus(),
         toArray()
     );
 }
@@ -337,7 +448,7 @@ export class Home extends Component<{}, {
         this.importFile(data);
     }
 
-    private onPathReady(path: Vector3[]) {
+    private onPathReady(path: Status[]) {
         status.path = path;
     }
     /**
