@@ -249,9 +249,9 @@ function renderHud(huds: TextBlock[] | undefined, status: Status) {
  * @param scene 
  */
 function onRender(scene: Scene) {
-    const dt1 = scene.getEngine().getDeltaTime() / 1000;
     const rocket = scene.getMeshByName('rocket');
     if (rocket && timeline) {
+        const dt1 = scene.getEngine().getDeltaTime() / 1000;
         time = time + dt1;
         const status = timeline.status(time);
         rocket.position = status.position;
