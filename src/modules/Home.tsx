@@ -16,6 +16,7 @@ import { Observable } from "rxjs";
 import { ajax } from 'rxjs/ajax';
 import { csv, lines } from "./position-reader";
 import { sprintf } from 'sprintf-js';
+import { createTimeline, Status, Timeline } from "./Timeline";
 
 const WebContext = homepage;
 const MoonTextureUrl = `/${WebContext}/texture/moon.jpg`;
@@ -28,149 +29,35 @@ const PlatformRatio = 480 / 360;
 const PlatformSize = 20;
 const Viewpoint = new Vector3(-20, 1.7, 40);
 
-const SampleInterval = 0.25;
+const StatusDescr = [
+    'Flying',
+    'Landed',
+    'Landed Out Of Platform',
+    'Crashed On Platform',
+    'Crashed Out Of Platform',
+    'Crashed On Platform',
+    'Crashed Out Of Platform',
+    'Out Of Range',
+    'Out Of Fuel'
+];
 
-var hud: TextBlock | undefined;
+const StatusColor = [
+    'white',
+    '#00ff00',
+    '#d80000',
+    '#d80000',
+    '#d80000',
+    '#d80000',
+    '#d80000',
+    '#d80000',
+    '#d80000',
+    '#d80000'
+];
 
-type Status = {
-    position: Vector3;
-    speed: Vector3;
-    fuel: number;
-    status: number;
-}
+var huds: TextBlock[] | undefined;
 
-function interpolateV3(p0: Vector3, p1: Vector3, alpha: number) {
-    const p01 = p1.subtract(p0);
-    const p = p01.scale(alpha).add(p0);
-    return p;
-}
-
-/**
- * 
- */
-class SceneStatus {
-    private _t: number;
-    private _sampleInterval: number;
-    private _path: Status[] | undefined;
-
-    constructor() {
-        this._t = 0;
-        this._sampleInterval = SampleInterval;
-    }
-
-    get t() { return this._t; }
-
-    get sampleInterval() { return this._sampleInterval; }
-
-    get path() { return this._path; }
-
-    set t(t: number) { this._t = t; }
-
-    set sampleInterval(sampleInterval: number) {
-        this._sampleInterval = sampleInterval;
-        this._t = 0;
-    }
-
-    set path(path: Status[] | undefined) {
-        this._path = path;
-        this._t = 0;
-    }
-
-    /**
-     * 
-     * @returns 
-     */
-    position() {
-        const x = this.interpolate();
-        if (!!x) {
-            return interpolateV3(x.from.position, x.to.position, x.alpha);
-        } else {
-            return Vector3.Zero();
-        }
-    }
-
-    /**
-     * 
-     * @returns 
-     */
-    speed() {
-        const x = this.interpolate();
-        if (!!x) {
-            return interpolateV3(x.from.speed, x.to.speed, x.alpha);
-        } else {
-            return Vector3.Zero();
-        }
-    }
-
-    status() {
-        const x = this.interpolate();
-        if (!!x) {
-            return x.from.status;
-        } else {
-            return 0;
-        }
-    }
-
-    fuel() {
-        const x = this.interpolate();
-        if (!!x) {
-            return (x.to.fuel-x.from.fuel) * x.alpha + x.from.fuel;
-        } else {
-            return 0;
-        }
-    }
-
-    /**
-     * 
-     * @param idx 
-     * @returns 
-     */
-    interpolate() {
-        const { path, t, sampleInterval } = this;
-        if (!path) {
-            return undefined;
-        }
-        const n = path.length;
-        const duration = (n - 1) * sampleInterval;
-        if (t >= duration) {
-            return { from: path[n - 1], to: path[n - 1], alpha: 0 };
-        } else {
-            const nt = t / sampleInterval;
-            const i = Math.floor(nt);
-            const alpha = nt - i;
-            const from = path[i];
-            const to = path[i + 1];
-            return { from, to, alpha };
-        }
-    }
-
-    /**
-     * 
-     * @param dt 
-     */
-    last(dt: number) {
-        this.t = this.t + dt;
-        return this;
-    }
-
-    reset() {
-        this._t = 0;
-    }
-}
-
-/**
- * 
- * @param sampleInterval 
- * @param path 
- */
-function createStatus(sampleInterval: number, path?: Status[]) {
-    const status = new SceneStatus();
-    status.path = path;
-    status.sampleInterval = sampleInterval;
-    return status;
-}
-
-const status = createStatus(SampleInterval);
+var time = 0;
+var timeline: Timeline | undefined;
 
 /**
  * 
@@ -261,15 +148,24 @@ function buildHud(scene: Scene) {
     text1.color = "white";
     text1.width = "250px";
     text1.height = "100px";
-    text1.fontFamily = "monospace";
+    text1.fontFamily = 'monospace';
     text1.fontSize = 20;
-    // text1.color = "#00ffff"
     text1.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     text1.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
     text1.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
     text1.paddingLeftInPixels = 10;
     advancedTexture.addControl(text1);
-    return text1;
+
+    const advancedTexture1 = AdvancedDynamicTexture.CreateFullscreenUI("GUI", undefined, scene);
+    const text2 = new TextBlock('HUD1');
+    text2.width = '400px';
+    text2.height = '50px';
+    text2.fontWeight = 'bold';
+    text2.fontSize = '28';
+    text2.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+    text2.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+    advancedTexture1.addControl(text2);
+    return [text1, text2];
 }
 
 /**
@@ -299,7 +195,6 @@ function buildPlatform(scene: Scene) {
 function buildLights(scene: Scene) {
     // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
     const light = new HemisphericLight("light", new Vector3(1, 1, 0), scene);
-    // const light = new DirectionalLight("light", new Vector3(1, -1, -1), scene);
     // Default intensity is 1. Let's dim the light a small amount
     light.intensity = 1;
     return light;
@@ -318,7 +213,7 @@ function onSceneReady(scene: Scene) {
     scene.activeCameras?.push(camera);
     scene.activeCameras?.push(camera2);
 
-    hud = buildHud(scene);
+    huds = buildHud(scene);
     buildLights(scene);
     buildGround(scene);
     buildPlatform(scene);
@@ -326,25 +221,27 @@ function onSceneReady(scene: Scene) {
     loadRocket(scene);
 }
 
-function renderHud(hud: TextBlock | undefined, status: SceneStatus) {
-    if (!!hud) {
-        const position = status.position();
+function renderHud(huds: TextBlock[] | undefined, status: Status) {
+    if (!!huds) {
+        const position = status.position;
         const d = Math.sqrt(position.x * position.x + position.z * position.z);
         const dirpn = 180 * Math.atan2(position.x, position.z) / Math.PI;
         const dir = Math.round(dirpn > 0 ? dirpn : dirpn + 360);
 
-        const speed = status.speed();
+        const speed = status.speed;
         const vh = Math.sqrt(speed.x * speed.x + speed.z * speed.z);
         const vdirpn = 180 * Math.atan2(speed.x, speed.z) / Math.PI;
         const vdir = Math.round(vdirpn > 0 ? vdirpn : vdirpn + 360);
-
         const txt = sprintf('Pos   %05.1f %03d %05.1f\nSpeed %03.1f %03d %+03.1f\nFuel  %05.1f',
             d, dir, position.y,
             vh, vdir, speed.y,
-            status.fuel());
-        hud.text = txt;
+            status.fuel);
+        huds[0].text = txt;
+
+        huds[1].text = StatusDescr[status.status];
+        huds[1].color = StatusColor[status.status];
     }
-    return hud;
+    return huds;
 }
 
 /**
@@ -353,12 +250,13 @@ function renderHud(hud: TextBlock | undefined, status: SceneStatus) {
  */
 function onRender(scene: Scene) {
     const dt1 = scene.getEngine().getDeltaTime() / 1000;
-    status.last(dt1);
     const rocket = scene.getMeshByName('rocket');
-    if (rocket) {
-        rocket.position = status.position();
+    if (rocket && timeline) {
+        time = time + dt1;
+        const status = timeline.status(time);
+        rocket.position = status.position;
+        renderHud(huds, status);
     }
-    renderHud(hud, status);
 }
 
 /**
@@ -390,7 +288,8 @@ function positionVectors() {
  * 
  */
 export class Home extends Component<{}, {
-    importModalShown: boolean
+    importModalShown: boolean;
+    timeline?: Timeline;
 }>{
 
     /**
@@ -449,8 +348,9 @@ export class Home extends Component<{}, {
     }
 
     private onPathReady(path: Status[]) {
-        status.path = path;
+        timeline = createTimeline(path);
     }
+
     /**
      * 
      * @param error 
@@ -465,7 +365,7 @@ export class Home extends Component<{}, {
             <Container fluid>
                 <MenuBar
                     onImport={() => this.showImportPanel()}
-                    onReplay={() => status.reset()}
+                    onReplay={() => { time = 0; }}
                 />
                 <Container fluid>
                     <SceneComponent antialias
